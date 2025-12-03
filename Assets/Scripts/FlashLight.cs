@@ -8,7 +8,7 @@ public class Flashlight : MonoBehaviour
     private bool flashlightActive = false;
     public int clicked = -1;
     public bool jumpscare = false;
-    public AudioSource audio;
+    public AudioSource audioo;
     private bool audioPlayed = false;
     public GameObject wall1;
     public GameObject wall2;
@@ -34,7 +34,7 @@ public class Flashlight : MonoBehaviour
         if (clicked == 3 && !audioPlayed)
         {
             Debug.Log("Jumpscare triggered.");
-            audio.Play();
+            audioo.Play();
             audioPlayed = true;
             jumpscare = true;
             clicked = -1;
