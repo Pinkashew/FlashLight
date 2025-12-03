@@ -20,16 +20,106 @@ public class ImageLoaderAndPlacer : MonoBehaviour
     [Header("Material Settings")]
     public Material baseMaterial; // Assign a working material here in Inspector
 
+    [Header("Input Settings")]
+    public KeyCode reloadKey = KeyCode.R;
+    public float reloadCooldown = 0.5f;
+
     [Header("Visualization")]
     public bool showGridGizmos = true;
     public Color gridColor = Color.white;
 
     private List<Vector2Int> usedPositions = new List<Vector2Int>();
     private List<GameObject> spawnedObjects = new List<GameObject>();
+    private float lastReloadTime = -100f;
+
+    [Header("Debug Info")]
+    [SerializeField] private string lastAction = "None";
+    [SerializeField] private int totalReloads = 0;
 
     void Start()
     {
         LoadImagesAndPlaceObjects();
+    }
+
+    void Update()
+    {
+        // Check for R key press with cooldown
+        if (Input.GetKeyDown(reloadKey) && Time.time > lastReloadTime + reloadCooldown)
+        {
+            lastReloadTime = Time.time;
+            ReloadPlacement();
+        }
+
+        // Debug info in editor
+#if UNITY_EDITOR
+        if (Input.GetKeyDown(KeyCode.T))
+        {
+            TestMaterialCreation();
+        }
+#endif
+    }
+
+    void ReloadPlacement()
+    {
+        totalReloads++;
+        Debug.Log($"Reloading placement (Press #{totalReloads})...");
+
+        // Option 1: Just re-place existing objects with new images
+        if (spawnedObjects.Count > 0)
+        {
+            ReRandomizeExisting();
+            lastAction = "Re-randomized existing objects";
+        }
+        // Option 2: Full reload with new positions
+        else
+        {
+            LoadImagesAndPlaceObjects();
+            lastAction = "Full reload with new positions";
+        }
+    }
+
+    [ContextMenu("Re-randomize Existing Objects")]
+    public void ReRandomizeExisting()
+    {
+        if (spawnedObjects.Count == 0)
+        {
+            Debug.LogWarning("No objects to re-randomize!");
+            return;
+        }
+
+        if (loadedTextures.Count == 0)
+        {
+            Debug.LogWarning("No images loaded!");
+            return;
+        }
+
+        // Clear used positions but keep objects
+        usedPositions.Clear();
+
+        // Assign new random positions to existing objects
+        for (int i = 0; i < spawnedObjects.Count; i++)
+        {
+            if (spawnedObjects[i] == null) continue;
+
+            Vector2Int newPosition = GetUniqueRandomPosition();
+            if (newPosition.x == -1)
+            {
+                Debug.LogWarning("No more available positions!");
+                break;
+            }
+
+            // Move object to new position
+            Vector3 worldPosition = GridToWorldPosition(newPosition);
+            spawnedObjects[i].transform.position = worldPosition;
+
+            // Apply new random texture
+            ApplyRandomTextureToObject(spawnedObjects[i]);
+
+            usedPositions.Add(newPosition);
+        }
+
+        Debug.Log($"Re-randomized {spawnedObjects.Count} objects");
+        lastAction = "Re-randomized existing objects";
     }
 
     [ContextMenu("Load Images and Place Objects")]
@@ -37,6 +127,7 @@ public class ImageLoaderAndPlacer : MonoBehaviour
     {
         LoadImagesFromFolder();
         PlaceObjectsWithRandomImages();
+        lastAction = "Loaded and placed objects";
     }
 
     [ContextMenu("Load Images From Folder")]
@@ -52,6 +143,7 @@ public class ImageLoaderAndPlacer : MonoBehaviour
         {
             loadedTextures.AddRange(textures);
             Debug.Log($"Loaded {loadedTextures.Count} images from Resources/{imageFolderPath}");
+            lastAction = $"Loaded {loadedTextures.Count} images";
             return;
         }
 
@@ -61,6 +153,7 @@ public class ImageLoaderAndPlacer : MonoBehaviour
         if (loadedTextures.Count == 0)
         {
             Debug.LogWarning("No images found! Please add images to Resources/Images or StreamingAssets/Images folder");
+            lastAction = "No images found";
         }
     }
 
@@ -91,6 +184,7 @@ public class ImageLoaderAndPlacer : MonoBehaviour
         }
 
         Debug.Log($"Loaded {loadedTextures.Count} images from StreamingAssets/{imageFolderPath}");
+        lastAction = $"Loaded {loadedTextures.Count} images from StreamingAssets";
     }
 
     private Texture2D LoadTextureFromFile(string filePath)
@@ -123,6 +217,7 @@ public class ImageLoaderAndPlacer : MonoBehaviour
         if (objectPrefab == null)
         {
             Debug.LogError("Object Prefab is not assigned!");
+            lastAction = "Error: No prefab assigned";
             return;
         }
 
@@ -154,6 +249,7 @@ public class ImageLoaderAndPlacer : MonoBehaviour
         }
 
         Debug.Log($"Placed {spawnedObjects.Count} objects");
+        lastAction = $"Placed {spawnedObjects.Count} objects";
     }
 
     private bool TestMaterialCreation()
@@ -273,11 +369,14 @@ public class ImageLoaderAndPlacer : MonoBehaviour
             }
         }
         spawnedObjects.Clear();
+        usedPositions.Clear();
+        lastAction = "Cleared all objects";
     }
 
     [ContextMenu("Fix All Materials")]
     public void FixAllMaterials()
     {
+        int fixedCount = 0;
         foreach (GameObject obj in spawnedObjects)
         {
             if (obj != null)
@@ -286,10 +385,12 @@ public class ImageLoaderAndPlacer : MonoBehaviour
                 if (renderer != null && (renderer.material == null || renderer.material.shader == null))
                 {
                     ApplyRandomTextureToObject(obj);
+                    fixedCount++;
                 }
             }
         }
-        Debug.Log("Attempted to fix all materials");
+        Debug.Log($"Fixed {fixedCount} materials");
+        lastAction = $"Fixed {fixedCount} materials";
     }
 
     private Vector2Int GetUniqueRandomPosition()
@@ -339,5 +440,32 @@ public class ImageLoaderAndPlacer : MonoBehaviour
             Vector3 end = GridToWorldPosition(new Vector2Int(gridSize, y)) - new Vector3(0, 0, cellSize * 0.5f);
             Gizmos.DrawLine(start, end);
         }
+    }
+
+    void OnGUI()
+    {
+        // Display debug info on screen
+        GUI.color = Color.white;
+        GUI.backgroundColor = new Color(0, 0, 0, 0.7f);
+
+        GUILayout.BeginArea(new Rect(10, 10, 300, 150));
+        GUILayout.BeginVertical("box");
+
+        GUILayout.Label($"Image Loader & Placer", GUI.skin.box);
+        GUILayout.Space(5);
+
+        GUILayout.Label($"Loaded Images: {loadedTextures.Count}");
+        GUILayout.Label($"Placed Objects: {spawnedObjects.Count}");
+        GUILayout.Label($"Used Positions: {usedPositions.Count}");
+        GUILayout.Label($"Last Action: {lastAction}");
+        GUILayout.Label($"Total Reloads: {totalReloads}");
+
+        GUILayout.Space(10);
+        GUI.color = Color.yellow;
+        GUILayout.Label($"Press [{reloadKey}] to reload placement");
+        GUILayout.Label($"Press [T] in Editor to test materials");
+
+        GUILayout.EndVertical();
+        GUILayout.EndArea();
     }
 }

@@ -9,6 +9,7 @@ public class Flashlight : MonoBehaviour
     public int clicked = -1;
     public bool jumpscare = false;
     public AudioSource audioo;
+    public AudioSource click;
     private bool audioPlayed = false;
     public GameObject wall1;
     public GameObject wall2;
@@ -28,6 +29,7 @@ public class Flashlight : MonoBehaviour
             Debug.Log("Flashlight toggle key pressed.");
             flashlightActive = !flashlightActive;
             flashlightLight.SetActive(flashlightActive);
+            click.Play();
             clicked++;
         }
 
